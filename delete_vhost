@@ -1,0 +1,77 @@
+#!/bin/bash
+
+# Deletes an apache virtual host wich created by create_vhost script
+# Params list:
+# -С : vhost config file name
+# -r : Remove directory used as virtual host root directory
+# -h : Show help
+
+F_REMOVE=0
+HELP_TEXT="
+-- Delete_vhost v 1.1 HELP output --
+----------------------------------
+AUTHOR: Alexander Brodilin
+E-MAIL: thealexbrodilin@gmail.com
+----------------------------------
+
+DESCRIPTION: Deletes an apache virtual host
+			 wich created by create_vhost script early
+
+----------------------------------
+
+OPTIONS:
+	-h	Show this help output
+	-r	Remove directory used as virtual host root directory
+	-C	Virtual host's configuration file name
+
+----------------------------------
+
+ATTANITION! You must be a root user to create virtualhost
+Running example:
+	 sudo ~/delete_vhost -r -C somehost.conf
+
+----------------------------------
+
+"
+
+while getopts C:hr opt
+do
+	case $opt in
+		h) cat <<Endofmessage
+$HELP_TEXT
+Endofmessage
+                   exit 2;;
+		r) F_REMOVE=1;;
+		C) CONFIG_FILE=$OPTARG;;
+		?) echo "[HELP] Type option -h to view all available options"
+		   exit 2;;
+	esac
+done
+
+if [[ $EUID -ne 0 ]]; then
+	echo "[ERROR] You must be a root user to create virtualhost"
+	exit 2
+fi
+
+if [ ! -e "/etc/apache2/sites-available/$CONFIG_FILE" ]; then
+	echo "[ERROR] Not fount virtual host's config file"
+	exit 2
+fi
+
+TEMP=`grep DocumentRoot  /etc/apache2/sites-available/$CONFIG_FILE`
+ROOT_DIR=`echo ${TEMP##* }`
+
+TEMP=`grep ServerName  /etc/apache2/sites-available/$CONFIG_FILE`
+HOST_NAME=`echo ${TEMP##* }`
+
+if [ $F_REMOVE == 1 ]; then
+	rm -r $ROOT_DIR
+	echo "[INFO] Virtual host's root directory has been removed"
+fi
+
+rm /etc/apache2/sites-available/$CONFIG_FILE
+
+sed -i "/127.0.1.1	$HOST_NAME/ d" /etc/hosts
+
+a2dissite $CONFIG_FILE
+service apache2 restart

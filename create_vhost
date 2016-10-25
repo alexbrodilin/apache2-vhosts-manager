@@ -1,0 +1,100 @@
+#!/bin/bash
+
+# Creates an apache virtual host
+# Arguments list:
+# -C : vhost config file name
+# -D : folder name that will be used as vhost's root directory
+# -H : vhost's server name
+# -h : show help
+# -f : create directory for virtual host if it's not exists
+
+F_CREATE=0
+HELP_TEXT="
+-- Create_vhost v 1.2 HELP output --
+----------------------------------
+AUTHOR: Alexander Brodilin
+E-MAIL: thealexbrodilin@gmail.com
+----------------------------------
+
+DESCRIPTION: Creates an apache virtual host using project directory
+			 in /var/www/ folder as virtual host root directory.
+
+----------------------------------
+
+OPTIONS:
+	-h	Show this help output
+	-f	Create directory for virtual host root directory
+		 in /var/www/ if it's NOT EXISTS
+	-D	Folder name that will be use as a virtual host
+		 root directory (it must be placed in /var/www/)
+	-H	Virtual host's name (example: somehost.net)
+	-C	Virtual host's configuration file name
+
+----------------------------------
+
+ATTANTION! You must be a root user to create virtualhost
+Running example:
+	 sudo ~/creat_vhost -f -D somedir -H somehost.net -C somehost.conf
+
+----------------------------------
+
+"
+
+while getopts D:H:C:hf opt
+do
+	case $opt in
+		h) cat <<Endofmessage
+$HELP_TEXT
+Endofmessage
+                   exit 2;;
+		f) F_CREATE=1;;
+		D) ROOT_DIR=$OPTARG;;
+		H) HOST_NAME=$OPTARG;;
+		C) CONFIG_FILE=$OPTARG;;
+		?) echo "[HELP] Type option -h to view all available options"
+		   exit 2;;
+	esac
+done
+
+if [[ $EUID -ne 0 ]]; then
+	echo "[ERROR] You must be a root user to create virtualhost"
+	exit 2
+fi
+
+INDEX_PAGE="<?php echo '<h1>Congratulations!</h1><br>Virtual host <u><b>$HOST_NAME</b></u> successfully created!'; ?>"
+
+if [ ! -e "/var/www/$ROOT_DIR" ] || [ $F_CREATE == 1 ]; then
+	echo "[WARNING] Not fount root directory for virtual host"
+	mkdir /var/www/$ROOT_DIR
+	echo "[INFO] Root directory for virtual host has been created"
+	echo $INDEX_PAGE >> /var/www/$ROOT_DIR/index.php
+	echo "[INFO] Index file index.php has been created in root directory"
+fi
+
+if [ ! -e "/var/www/$ROOT_DIR" ]; then
+	echo "[ERROR] Not fount root directory for virtual host"
+	exit 2
+fi
+
+if [ ! -e "/var/www/$ROOT_DIR/logs" ]; then
+	echo "[WARNING] '/var/www/$ROOT_DIR/logs' directory not found"	
+	mkdir /var/www/$ROOT_DIR/logs
+	echo "[INFO] '/var/www/$ROOT_DIR/logs' directory has been created"	
+fi
+
+echo "<VirtualHost *:80>" >> /etc/apache2/sites-available/$CONFIG_FILE
+echo "ServerAdmin webmaster@localhost" >> /etc/apache2/sites-available/$CONFIG_FILE
+echo "DocumentRoot /var/www/$ROOT_DIR" >> /etc/apache2/sites-available/$CONFIG_FILE
+echo "ServerName $HOST_NAME" >> /etc/apache2/sites-available/$CONFIG_FILE
+echo "ErrorLog /var/www/$ROOT_DIR/logs/error.log" >> /etc/apache2/sites-available/$CONFIG_FILE
+echo "LogLevel warn" >> /etc/apache2/sites-available/$CONFIG_FILE
+echo "CustomLog /var/www/$ROOT_DIR/logs/access.log combined" >> /etc/apache2/sites-available/$CONFIG_FILE
+echo "<Directory /var/www>" >> /etc/apache2/sites-available/$CONFIG_FILE
+echo "AllowOverride All" >> /etc/apache2/sites-available/$CONFIG_FILE
+echo "</Directory>" >> /etc/apache2/sites-available/$CONFIG_FILE
+echo "</VirtualHost>" >> /etc/apache2/sites-available/$CONFIG_FILE
+
+echo "127.0.1.1	$HOST_NAME" >> /etc/hosts
+
+a2ensite $CONFIG_FILE
+service apache2 restart
